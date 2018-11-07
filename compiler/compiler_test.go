@@ -2,12 +2,12 @@ package compiler
 
 import (
 	"fmt"
+	"javascript_interpreter/ast"
+	"javascript_interpreter/lexer"
+	"javascript_interpreter/object"
+	"javascript_interpreter/parser"
 	"testing"
 	"writingincompiler/code"
-	"writinginterpreter/ast"
-	"writinginterpreter/lexer"
-	"writinginterpreter/object"
-	"writinginterpreter/parser"
 )
 
 type compilerTestCase struct {
@@ -156,7 +156,7 @@ func testConstants(t *testing.T, expected []interface{}, actual []object.Object)
 	for i, constant := range expected {
 		switch constant := constant.(type) {
 		case int:
-			err := testIntegerObject(int64(constant), actual[i])
+			err := testIntegerObject(float64(constant), actual[i])
 			if err != nil {
 				return fmt.Errorf("constant %d - testIntegeerObject failed %s", i, err)
 			}
@@ -165,8 +165,8 @@ func testConstants(t *testing.T, expected []interface{}, actual []object.Object)
 	return nil
 }
 
-func testIntegerObject(expected int64, actual object.Object) error {
-	result, ok := actual.(*object.Integer)
+func testIntegerObject(expected float64, actual object.Object) error {
+	result, ok := actual.(*object.Number)
 	if !ok {
 		return fmt.Errorf("object is not Integer. got=%T (%+v)", actual, actual)
 	}
@@ -295,6 +295,42 @@ func TestGlobalLetStatements(t *testing.T) {
 				code.Make(code.OpSetGlobal, 0),
 				code.Make(code.OpGetGlobal, 0),
 				code.Make(code.OpPop),
+			},
+		},
+	}
+
+	runCompilerTests(t, tests)
+}
+
+func TestStringStatement(t *testing.T) {
+
+	tests := []compilerTestCase{
+		{
+			input: `
+			let one = "stringdata";
+			`,
+			expectedConstants: []interface{}{"stringdata"},
+			expectedInstructions: []code.Instructions{
+				code.Make(code.OpConstant, 0),
+				code.Make(code.OpSetGlobal, 0),
+			},
+		},
+	}
+
+	runCompilerTests(t, tests)
+}
+
+func TestStringAddStatement(t *testing.T) {
+
+	tests := []compilerTestCase{
+		{
+			input: `
+			let one = "data1" + "data2" ;
+			`,
+			expectedConstants: []interface{}{"data1data2"},
+			expectedInstructions: []code.Instructions{
+				code.Make(code.OpConstant, 0),
+				code.Make(code.OpSetGlobal, 0),
 			},
 		},
 	}

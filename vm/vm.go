@@ -2,12 +2,13 @@ package vm
 
 import (
 	"fmt"
+	"javascript_interpreter/object"
 	"writingincompiler/code"
 	"writingincompiler/compiler"
-	"writinginterpreter/object"
 )
 
 const StackSize = 2048
+const GlobalsSize = 65536
 
 var True = &object.Boolean{Value: true}
 var False = &object.Boolean{Value: false}
@@ -16,8 +17,9 @@ type VM struct {
 	constants    []object.Object
 	instructions code.Instructions
 
-	stack []object.Object
-	sp    int
+	stack   []object.Object
+	sp      int
+	globals []object.Object
 }
 
 func New(bytecode *compiler.Bytecode) *VM {
@@ -26,7 +28,16 @@ func New(bytecode *compiler.Bytecode) *VM {
 		constants:    bytecode.Constants,
 		stack:        make([]object.Object, StackSize),
 		sp:           0,
+		globals:      make([]object.Object, GlobalsSize),
 	}
+}
+
+func NewWithGlobalsStore(bytecode *compiler.Bytecode, s []object.Object) *VM {
+
+	vm := New(bytecode)
+	vm.globals = s
+
+	return vm
 }
 
 func (vm *VM) LastPoppedStackElem() object.Object {
@@ -59,6 +70,20 @@ func (vm *VM) Run() error {
 			}
 		case code.OpPop:
 			vm.pop()
+		case code.OpSetGlobal:
+			globalIndex := code.ReadUint16(vm.instructions[ip+1:])
+			ip += 2
+			vm.globals[globalIndex] = vm.pop()
+
+		case code.OpGetGlobal:
+			globalIndex := code.ReadUint16(vm.instructions[ip+1:])
+
+			ip += 2
+			err := vm.push(vm.globals[globalIndex])
+			if err != nil {
+				return err
+			}
+
 		case code.OpTrue:
 			err := vm.push(True)
 			if err != nil {
@@ -111,8 +136,8 @@ func (vm *VM) executeMinusOperator() error {
 	if operand.Type() != object.INTEGER_OBJ {
 		return fmt.Errorf("unsupported type for negation: %s", operand.Type())
 	}
-	value := operand.(*object.Integer).Value
-	return vm.push(&object.Integer{Value: -value})
+	value := operand.(*object.Number).Value
+	return vm.push(&object.Number{Value: -value})
 
 }
 
@@ -151,8 +176,8 @@ func (vm *VM) executeComparison(op code.Opcode) error {
 
 func (vm *VM) executeIntegerComparison(op code.Opcode, left, right object.Object) error {
 
-	leftValue := left.(*object.Integer).Value
-	rightValue := right.(*object.Integer).Value
+	leftValue := left.(*object.Number).Value
+	rightValue := right.(*object.Number).Value
 
 	switch op {
 	case code.OpEqual:
@@ -185,14 +210,18 @@ func (vm *VM) executeBinaryOperation(op code.Opcode) error {
 		return vm.executeBinaryIntegerOperation(op, left, right)
 	}
 
+	if leftType == object.STRING_OBJ && rightType == object.STRING_OBJ {
+		return vm.executeBinaryStringOperation(op, left, right)
+	}
+
 	return fmt.Errorf("unsupported types for binary operation: %s %s", leftType, rightType)
 }
 
 func (vm *VM) executeBinaryIntegerOperation(op code.Opcode, left, right object.Object) error {
-	leftValue := left.(*object.Integer).Value
-	rightValue := right.(*object.Integer).Value
+	leftValue := left.(*object.Number).Value
+	rightValue := right.(*object.Number).Value
 
-	var result int64
+	var result float64
 
 	switch op {
 	case code.OpAdd:
@@ -207,7 +236,23 @@ func (vm *VM) executeBinaryIntegerOperation(op code.Opcode, left, right object.O
 		return fmt.Errorf("unknown integer operator: %d", op)
 	}
 
-	return vm.push(&object.Integer{Value: result})
+	return vm.push(&object.Number{Value: result})
+}
+
+func (vm *VM) executeBinaryStringOperation(op code.Opcode, left, right object.Object) error {
+	leftValue := left.(*object.String).Value
+	rightValue := right.(*object.String).Value
+
+	var result string
+
+	switch op {
+	case code.OpAdd:
+		result = leftValue + rightValue
+	default:
+		return fmt.Errorf("unknown integer operator: %d", op)
+	}
+
+	return vm.push(&object.String{Value: result})
 }
 
 func (vm *VM) push(o object.Object) error {

@@ -2,12 +2,12 @@ package vm
 
 import (
 	"fmt"
+	"javascript_interpreter/ast"
+	"javascript_interpreter/lexer"
+	"javascript_interpreter/object"
+	"javascript_interpreter/parser"
 	"testing"
 	"writingincompiler/compiler"
-	"writinginterpreter/ast"
-	"writinginterpreter/lexer"
-	"writinginterpreter/object"
-	"writinginterpreter/parser"
 )
 
 func parse(input string) *ast.Program {
@@ -16,14 +16,14 @@ func parse(input string) *ast.Program {
 	return p.ParseProgram()
 }
 
-func testIntegerObject(expected int64, actual object.Object) error {
-	result, ok := actual.(*object.Integer)
+func testIntegerObject(expected float64, actual object.Object) error {
+	result, ok := actual.(*object.Number)
 	if !ok {
 		return fmt.Errorf("object is not Integer. got=%T (%+v)", actual, actual)
 	}
 
 	if result.Value != expected {
-		return fmt.Errorf("object has wrong value. got=%d, want=%d", result.Value, expected)
+		return fmt.Errorf("object has wrong value. got=%f, want=%f", result.Value, expected)
 	}
 
 	return nil
@@ -66,7 +66,7 @@ func testExpectedObject(t *testing.T, expected interface{}, actual object.Object
 
 	switch expected := expected.(type) {
 	case int:
-		err := testIntegerObject(int64(expected), actual)
+		err := testIntegerObject(float64(expected), actual)
 
 		if err != nil {
 			t.Errorf("testIntegerObject failed: %s", err)
@@ -77,7 +77,26 @@ func testExpectedObject(t *testing.T, expected interface{}, actual object.Object
 		if err != nil {
 			t.Errorf("tesBooleanObject failed: %s", err)
 		}
+	case string:
+		err := testStringObject(string(expected), actual)
+
+		if err != nil {
+			t.Errorf("tesBooleanObject failed: %s", err)
+		}
 	}
+}
+
+func testStringObject(expected string, actual object.Object) error {
+	result, ok := actual.(*object.String)
+
+	if !ok {
+		return fmt.Errorf("object is not Boolean. got=%T (%+v)", actual, actual)
+	}
+
+	if result.Value != expected {
+		return fmt.Errorf("object has wrong value. got=%s, want=%s", result.Value, expected)
+	}
+	return nil
 }
 
 func testBooleanObject(expected bool, actual object.Object) error {
@@ -127,6 +146,24 @@ func TestConditionals(t *testing.T) {
 		{"if (true){ 10 }", 10},
 		{"if (true){ 10 } else { 20 }", 10},
 		{"if (false){ 10 } else { 20 }", 20},
+	}
+
+	runVmTests(t, tests)
+}
+
+func TestGlobalLetStatements(t *testing.T) {
+	tests := []vmTestCase{
+		{"let one = 1; one", 1},
+		{"let one = 1; let two = 2; one + two", 3},
+		{"let one = 1; let two = one + one; one + two", 3},
+	}
+
+	runVmTests(t, tests)
+}
+
+func TestSringLetStatements(t *testing.T) {
+	tests := []vmTestCase{
+		{`let one ="data" + "data1" ; one`, "datadata1"},
 	}
 
 	runVmTests(t, tests)

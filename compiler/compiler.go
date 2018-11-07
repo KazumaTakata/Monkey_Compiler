@@ -2,9 +2,9 @@ package compiler
 
 import (
 	"fmt"
+	"javascript_interpreter/ast"
+	"javascript_interpreter/object"
 	"writingincompiler/code"
-	"writinginterpreter/ast"
-	"writinginterpreter/object"
 )
 
 type Compiler struct {
@@ -30,6 +30,13 @@ func New() *Compiler {
 		previousInstruction: EmittedInstruction{},
 		symbolTable:         NewSymbolTable(),
 	}
+}
+
+func NewWithState(s *SymbolTable, constants []object.Object) *Compiler {
+	compiler := New()
+	compiler.symbolTable = s
+	compiler.constants = constants
+	return compiler
 }
 
 func (c *Compiler) Compile(node ast.Node) error {
@@ -100,9 +107,13 @@ func (c *Compiler) Compile(node ast.Node) error {
 			return fmt.Errorf("unknown operator %s", node.Operator)
 		}
 
-	case *ast.IntegerLiteral:
-		integer := &object.Integer{Value: node.Value}
+	case *ast.NumberLiteral:
+		integer := &object.Number{Value: node.Value}
 		c.emit(code.OpConstant, c.addConstant(integer))
+
+	case *ast.StringLiteral:
+		string := &object.String{Value: node.Value}
+		c.emit(code.OpConstant, c.addConstant(string))
 
 	case *ast.PrefixExpression:
 		err := c.Compile(node.Right)
